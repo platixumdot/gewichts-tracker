@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gewichts-Tracker</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap');
+
+body {
+    font-family: 'Inter', sans-serif;
+    background-color: #121212;
+    color: #e0e0e0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+header {
+    width: 100%;
+    background-color: #1f1f1f;
+    color: #ffffff;
+    padding: 1.5rem;
+    text-align: center;
+    font-size: 2rem;
+    font-weight: 600;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+    position: sticky;
+    top: 0;
+}
+
+main {
+    width: 90%;
+    max-width: 900px;
+    margin: 2rem 0;
+    background: #1e1e1e;
+    padding: 2rem;
+    border-radius: 16px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+    animation: fadeIn 1s ease;
+}
+
+@keyframes fadeIn {
+    from {opacity: 0; transform: translateY(20px);}
+    to {opacity: 1; transform: translateY(0);}
+}
+
+h2 { margin-top: 0; color: #ffffff; }
+
+.input-group { display: flex; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem; }
+
+.input-group input {
+    flex: 1;
+    padding: 0.7rem;
+    border-radius: 12px;
+    border: 1px solid #555;
+    background-color: #2b2b2b;
+    color: #e0e0e0;
+    font-size: 1rem;
+    transition: all 0.3s ease;
+}
+
+.input-group input:focus {
+    border-color: #4a90e2;
+    box-shadow: 0 0 8px rgba(74,144,226,0.5);
+    outline: none;
+}
+
+button {
+    padding: 0.7rem 1.5rem;
+    background-color: #4a90e2;
+    color: white;
+    border: none;
+    border-radius: 12px;
+    cursor: pointer;
+    font-size: 1rem;
+    transition: background 0.3s ease, transform 0.2s ease;
+}
+
+button:hover {
+    background-color: #357ab8;
+    transform: scale(1.05);
+}
+
+#feedback {
+    margin-top: 1rem;
+    font-weight: 600;
+    font-size: 1.1rem;
+    color: #4caf50;
+    opacity: 0;
+    transition: opacity 0.5s ease;
+}
+
+canvas { margin-top: 2rem; background-color: #1e1e1e; border-radius: 12px; }
+
+ul { margin-top: 1rem; padding-left: 20px; }
+li { margin-bottom: 0.5rem; display: flex; justify-content: space-between; align-items: center; }
+.deleteBtn {
+    background-color: #e24a4a;
+    border: none;
+    color: white;
+    padding: 0.2rem 0.5rem;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    transition: background 0.3s ease;
+}
+.deleteBtn:hover { background-color: #c12f2f; }
+
+.progress-bar-container {
+    background-color: #2b2b2b;
+    border-radius: 12px;
+    overflow: hidden;
+    margin: 0.5rem 0;
+    height: 20px;
+}
+.progress-bar {
+    height: 100%;
+    background-color: #4a90e2;
+    width: 0%;
+    transition: width 0.8s ease;
+}
+.stats { margin-top: 1rem; }
+.stats div { margin-bottom: 0.5rem; }
+</style>
+</head>
+<body>
+<header>Gewichts-Tracker</header>
+<main>
+<h2>Gewicht eingeben</h2>
+<div class="input-group">
+    <input type="date" id="entryDate">
+    <input type="number" id="neelWeight" placeholder="Neel Gewicht (kg)" min="0" step="0.1">
+    <input type="number" id="saschaWeight" placeholder="Sascha Gewicht (kg)" min="0" step="0.1">
+</div>
+<div class="input-group">
+    <input type="number" id="neelGoal" placeholder="Neel Zielgewicht" min="0" step="0.1">
+    <input type="number" id="saschaGoal" placeholder="Sascha Zielgewicht" min="0" step="0.1">
+</div>
+<button onclick="saveWeights()">Speichern</button>
+<div id="feedback"></div>
+
+<h2>Analytics</h2>
+<canvas id="weightChart" width="400" height="200"></canvas>
+
+<div class="stats" id="stats"></div>
+
+<h2>Alle Einträge</h2>
+<ul id="entriesList"></ul>
+</main>
+
+<script>
+const neelInput = document.getElementById('neelWeight');
+const saschaInput = document.getElementById('saschaWeight');
+const dateInput = document.getElementById('entryDate');
+const feedback = document.getElementById('feedback');
+const entriesList = document.getElementById('entriesList');
+const statsDiv = document.getElementById('stats');
+const neelGoalInput = document.getElementById('neelGoal');
+const saschaGoalInput = document.getElementById('saschaGoal');
+const ctx = document.getElementById('weightChart').getContext('2d');
+
+// Daten laden
+let data = JSON.parse(localStorage.getItem('weightData')) || { neel: [], sascha: [], dates: [] };
+let goals = JSON.parse(localStorage.getItem('weightGoals')) || { neel: null, sascha: null };
+
+// Chart initial
+const chart = new Chart(ctx, {
+    type: 'line',
+    data: { labels: data.dates, datasets: [
+        { label: 'Neel', data: data.neel, borderColor: '#4a90e2', backgroundColor: 'rgba(74,144,226,0.2)', tension:0.3, fill:true, pointRadius:5 },
+        { label: 'Sascha', data: data.sascha, borderColor: '#e24a4a', backgroundColor: 'rgba(226,74,74,0.2)', tension:0.3, fill:true, pointRadius:5 }
+    ]},
+    options: { responsive:true, plugins: { legend:{ labels:{ color:'#e0e0e0'} }, title:{ display:true, text:'Gewichtsverlauf', color:'#e0e0e0'} },
+        animation:{duration:1000, easing:'easeOutQuart'},
+        scales:{ y:{ beginAtZero:false, ticks:{ color:'#e0e0e0'} }, x:{ ticks:{ color:'#e0e0e0'} } }
+    }
+});
+
+const feedbacks = [
+    "Super gemacht! 💪", "Weiter so! 🔥", "Abnahme erreicht, klasse! ✅",
+    "Toll, du bleibst dran! 🌟", "Fantastisch! Keep it up! 💯"
+];
+
+function saveWeights(){
+    const neelWeight = parseFloat(neelInput.value);
+    const saschaWeight = parseFloat(saschaInput.value);
+    const entryDate = dateInput.value;
+
+    const neelGoal = parseFloat(neelGoalInput.value);
+    const saschaGoal = parseFloat(saschaGoalInput.value);
+    if(!isNaN(neelGoal)) goals.neel = neelGoal;
+    if(!isNaN(saschaGoal)) goals.sascha = saschaGoal;
+
+    if(!entryDate){ alert("Bitte ein Datum auswählen!"); return; }
+    if(isNaN(neelWeight) || isNaN(saschaWeight)){ alert("Bitte beide Gewichte korrekt eingeben!"); return; }
+
+    let message = '';
+    if(data.neel.length>0 && neelWeight < data.neel[data.neel.length-1]) message += "Neel: "+ feedbacks[Math.floor(Math.random()*feedbacks.length)]+" ";
+    if(data.sascha.length>0 && saschaWeight < data.sascha[data.sascha.length-1]) message += "Sascha: "+ feedbacks[Math.floor(Math.random()*feedbacks.length)];
+
+    feedback.style.opacity = 0;
+    setTimeout(()=>{feedback.textContent=message; feedback.style.opacity=1;},200);
+
+    data.neel.push(neelWeight);
+    data.sascha.push(saschaWeight);
+    data.dates.push(entryDate);
+
+    localStorage.setItem('weightData', JSON.stringify(data));
+    localStorage.setItem('weightGoals', JSON.stringify(goals));
+
+    updateChart();
+    renderEntries();
+    renderStats();
+
+    neelInput.value=''; saschaInput.value=''; dateInput.value='';
+}
+
+function deleteEntry(index){
+    data.neel.splice(index,1);
+    data.sascha.splice(index,1);
+    data.dates.splice(index,1);
+    localStorage.setItem('weightData', JSON.stringify(data));
+    updateChart();
+    renderEntries();
+    renderStats();
+}
+
+function renderEntries(){
+    entriesList.innerHTML='';
+    data.dates.forEach((date,i)=>{
+        const li=document.createElement('li');
+        li.textContent=`${date} - Neel: ${data.neel[i]} kg, Sascha: ${data.sascha[i]} kg`;
+        const btn=document.createElement('button');
+        btn.textContent='Löschen';
+        btn.className='deleteBtn';
+        btn.onclick=()=>deleteEntry(i);
+        li.appendChild(btn);
+        entriesList.appendChild(li);
+    });
+}
+
+function renderStats(){
+    if(data.dates.length===0){ statsDiv.innerHTML='Keine Daten vorhanden'; return; }
+
+    const avgNeel=(data.neel.reduce((a,b)=>a+b,0)/data.neel.length).toFixed(1);
+    const avgSascha=(data.sascha.reduce((a,b)=>a+b,0)/data.sascha.length).toFixed(1);
+
+    const deltaNeel = data.neel.length>1 ? (data.neel[data.neel.length-1]-data.neel[data.neel.length-2]).toFixed(1) : 0;
+    const deltaSascha = data.sascha.length>1 ? (data.sascha[data.sascha.length-1]-data.sascha[data.sascha.length-2]).toFixed(1) : 0;
+
+    let html=`<div>Neel Durchschnitt: ${avgNeel} kg, Änderung: ${deltaNeel>0?`🔺 ${deltaNeel}`:`🔻 ${Math.abs(deltaNeel)}`}</div>`;
+    html+=`<div>Sascha Durchschnitt: ${avgSascha} kg, Änderung: ${deltaSascha>0?`🔺 ${deltaSascha}`:`🔻 ${Math.abs(deltaSascha)}`}</div>`;
+
+    // Fortschritt Balken
+    if(goals.neel){
+        const percent = Math.max(0,Math.min(100,(goals.neel-data.neel[data.neel.length-1])/(goals.neel-data.neel[0])*100));
+        html+=`<div>Neel Fortschritt:<div class="progress-bar-container"><div class="progress-bar" style="width:${percent}%;"></div></div></div>`;
+    }
+    if(goals.sascha){
+        const percent = Math.max(0,Math.min(100,(goals.sascha-data.sascha[data.sascha.length-1])/(goals.sascha-data.sascha[0])*100));
+        html+=`<div>Sascha Fortschritt:<div class="progress-bar-container"><div class="progress-bar" style="width:${percent}%;"></div></div></div>`;
+    }
+
+    statsDiv.innerHTML=html;
+}
+
+function updateChart(){
+    chart.data.labels = data.dates;
+    chart.data.datasets[0].data = data.neel;
+    chart.data.datasets[1].data = data.sascha;
+    chart.update();
+}
+
+// Initial laden
+renderEntries();
+renderStats();
+updateChart();
+</script>
+</body>
+</html>
